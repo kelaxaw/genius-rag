@@ -32,6 +32,7 @@ packages = ["src/genius_rag"]
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+extend-exclude = ["notebooks", "*.ipynb"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
