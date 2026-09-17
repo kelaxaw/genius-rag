@@ -1,8 +1,4 @@
-"""Проверка окружения: конфиг, Qdrant, Postgres достижимы из кода.
-
-Запуск: `uv run python scripts/check_env.py` (или `make check`).
-Ожидаемый вывод — три строки OK и код возврата 0. Любая ошибка — traceback и код 1.
-"""
+"""Проверка окружения: конфиг, Qdrant и Postgres достижимы (make check)."""
 
 import sys
 
@@ -13,14 +9,9 @@ from genius_rag.config import settings
 
 
 def check_config() -> None:
-    accessToken = settings.genius_access_token.get_secret_value()
-
-    llmModel = settings.llm_model
-
-    if not accessToken:
-        raise RuntimeError("GENIUS_ACCESS_TOKEN is empty. Fill in .env")
-    else:
-        print(f"config OK: genius token set, model={llmModel}")
+    if not settings.genius_access_token.get_secret_value():
+        raise RuntimeError("GENIUS_ACCESS_TOKEN is empty, fill in .env")
+    print(f"config OK: genius token set, model={settings.llm_model}")
 
 
 def check_qdrant() -> None:
@@ -33,8 +24,7 @@ def check_postgres() -> None:
     with psycopg.connect(settings.postgres_dsn) as conn:
         row = conn.execute("SELECT version()").fetchone()
         if row is None:
-            raise RuntimeError("postgres doesn't return version()")
-
+            raise RuntimeError("postgres did not return version()")
         print(f"postgres OK: {row[0][:30]}")
 
 
