@@ -1,4 +1,4 @@
-.PHONY: install up down lint typecheck check
+.PHONY: install up down lint typecheck check load psql
 
 install:
 	uv sync
@@ -17,3 +17,9 @@ typecheck:
 
 check: lint typecheck
 	uv run python scripts/check_env.py
+
+load:
+	uv run python scripts/load_db.py
+
+psql:
+	docker compose exec postgres psql -U genius -d genius

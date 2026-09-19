@@ -1,7 +1,7 @@
-"""Настройки приложения.
+"""Application settings.
 
-Источник значений: переменные окружения и файл .env (см. .env.example).
-Один объект `settings` импортируется везде — никаких os.environ по коду.
+Values come from environment variables and .env (see .env.example).
+A single `settings` object is imported everywhere; no os.environ access elsewhere.
 """
 
 from pydantic import SecretStr
@@ -12,7 +12,6 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     genius_access_token: SecretStr
-    qdrant_url: str = "http://localhost:6333"
     postgres_dsn: str = "postgresql://genius:genius@localhost:5432/genius"
 
     openrouter_api_key: SecretStr | None = None

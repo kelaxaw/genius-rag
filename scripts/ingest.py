@@ -35,7 +35,7 @@ def ingest_artist(client: GeniusClient, artist: str, max_songs: int = 5) -> int:
             annotations = [
                 {"fragment": ref["fragment"], "text": ref["annotations"][0]["body"]["plain"]}
                 for ref in refs
-                if ref["annotations"]
+                if ref["annotations"] and ref["annotations"][0]["body"]["plain"]
             ]
             record = {
                 "song_id": song["id"],
