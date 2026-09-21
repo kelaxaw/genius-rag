@@ -1,4 +1,4 @@
-.PHONY: install up down lint typecheck check load psql
+.PHONY: install up down lint typecheck check load psql chunks
 
 install:
 	uv sync
@@ -23,3 +23,6 @@ load:
 
 psql:
 	docker compose exec postgres psql -U genius -d genius
+
+chunks:
+	uv run python scripts/build_chunks.py

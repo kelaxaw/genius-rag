@@ -36,3 +36,19 @@ CREATE TABLE IF NOT EXISTS annotations (
 );
 
 CREATE INDEX IF NOT EXISTS annotations_song_id_idx ON annotations (song_id);
+
+-- Child chunks of annotations. parent = annotations.id (search by chunk, cite the parent).
+-- embedding is filled at the embedding stage; NULL until computed. Rebuild = DELETE by
+-- annotation_id + INSERT (ON CONFLICT cannot drop stale positions when a chunk count shrinks).
+CREATE TABLE IF NOT EXISTS chunks (
+    id            integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    annotation_id integer  NOT NULL REFERENCES annotations (id) ON DELETE CASCADE,
+    position      smallint NOT NULL,
+    lang          text     NOT NULL CHECK (lang IN ('ru', 'en')),
+    text          text     NOT NULL CHECK (text <> ''),
+    tokens        integer  NOT NULL,
+    embedding     vector(384),
+    UNIQUE (annotation_id, position)
+);
+
+CREATE INDEX IF NOT EXISTS chunks_annotation_id_idx ON chunks (annotation_id);

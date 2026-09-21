@@ -10,6 +10,7 @@ from typing import Any
 
 import psycopg
 
+from genius_rag.chunking.docs import AnnotationCtx, Chunk
 from genius_rag.config import settings
 
 SCHEMA_PATH = Path(__file__).with_name("schema.sql")
@@ -113,3 +114,33 @@ def load_jsonl(conn: Conn, path: Path) -> tuple[int, int]:
         annotations_count += load_song(conn=conn, record=record)
 
     return (len(jsonl), annotations_count)
+
+
+def fetch_annotation_ctx(conn: Conn) -> list[AnnotationCtx]:
+    """Every annotation with the context needed for its prefix; artists joined by position."""
+    rows = conn.execute("""SELECT ann.id, ss.id, STRING_AGG(ar.name, ', ' ORDER BY sa.position),
+      ss.title, ss.album, ann.fragment, ann.text
+      FROM songs ss
+      JOIN song_artists sa ON ss.id = sa.song_id
+      JOIN artists ar ON ar.id = sa.artist_id
+      JOIN annotations ann ON ss.id = ann.song_id
+      GROUP BY ann.id, ss.id, ss.title, ss.album, ann.fragment, ann.text
+      ORDER BY ann.id""").fetchall()
+
+    return [AnnotationCtx(*row) for row in rows]
+
+
+def update_chunks(conn: Conn, annotation_id: int, chunks: list[Chunk]) -> int:
+    """Replace an annotation's chunks (DELETE + INSERT); return the number inserted."""
+    conn.execute("""DELETE FROM chunks WHERE annotation_id = %s""", (annotation_id,))
+
+    values = [(c.annotation_id, c.position, c.lang, c.text, c.tokens) for c in chunks]
+
+    with conn.cursor() as curs:
+        curs.executemany(
+            """INSERT INTO chunks (annotation_id, position, lang, text, tokens)
+          VALUES (%s, %s, %s, %s, %s)""",
+            values,
+        )
+
+        return curs.rowcount
