@@ -5,12 +5,15 @@ context managers so a whole file loads in one transaction.
 """
 
 import json
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import psycopg
+from pgvector.psycopg import register_vector
 
-from genius_rag.chunking.docs import AnnotationCtx, Chunk
+from genius_rag.chunking.docs import AnnotationCtx, Chunk, detect_lang
 from genius_rag.config import settings
 
 SCHEMA_PATH = Path(__file__).with_name("schema.sql")
@@ -20,7 +23,12 @@ Conn = psycopg.Connection[Any]
 
 def connect() -> Conn:
     """Open a connection from the configured DSN; use as a context manager."""
-    return psycopg.connect(settings.postgres_dsn)
+    conn = psycopg.connect(settings.postgres_dsn)
+    # register_vector adapts numpy arrays to vector(384). It needs the type to exist,
+    # so the extension is created here, before schema.sql runs.
+    conn.execute("CREATE EXTENSION IF NOT EXISTS vector")
+    register_vector(conn)
+    return conn
 
 
 def init_schema(conn: Conn) -> None:
@@ -144,3 +152,71 @@ def update_chunks(conn: Conn, annotation_id: int, chunks: list[Chunk]) -> int:
         )
 
         return curs.rowcount
+
+
+# ---- embeddings + search ------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class Hit:
+    """One search result. Higher score = more relevant; dense and full-text scales differ."""
+
+    chunk_id: int
+    annotation_id: int
+    text: str
+    score: float
+
+
+def fetch_chunks_without_embedding(conn: Conn) -> list[tuple[int, str]]:
+    """(id, text) of chunks with no embedding yet, so re-runs only encode new rows."""
+    return conn.execute(
+        """SELECT id, text FROM chunks WHERE embedding IS NULL ORDER BY id"""
+    ).fetchall()
+
+
+def update_embeddings(conn: Conn, rows: list[tuple[int, np.ndarray]]) -> int:
+    """Store vectors; rows = [(chunk_id, vector), ...]. Return the number of updated rows."""
+    values = [(vector, chunk_id) for chunk_id, vector in rows]
+
+    with conn.cursor() as curr:
+        curr.executemany("""UPDATE chunks SET embedding = %s WHERE id = %s""", values)
+
+        return curr.rowcount
+
+
+def knn_search(conn: Conn, query_vec: np.ndarray, k: int = 10) -> list[Hit]:
+    """Top-k chunks by cosine similarity to the query vector (embedded rows only)."""
+    rows = conn.execute(
+        """SELECT
+        id,
+        annotation_id, text,
+        1 - (embedding <=> %s) AS score
+        FROM chunks
+        WHERE embedding IS NOT NULL
+        ORDER BY embedding <=> %s
+        LIMIT %s""",
+        (query_vec, query_vec, k),
+    ).fetchall()
+
+    return [Hit(*r) for r in rows]
+
+
+def fts_search(conn: Conn, query: str, k: int = 10) -> list[Hit]:
+    """Top-k chunks by full-text match; dictionary follows the query language."""
+    lang = "russian" if detect_lang(query) == "ru" else "english"
+
+    rows = conn.execute(
+        """SELECT
+      id,
+      annotation_id,
+      text,
+      ts_rank_cd(tsv, websearch_to_tsquery(%s::regconfig, %s)) AS score
+      FROM chunks
+      WHERE tsv @@ websearch_to_tsquery(%s::regconfig, %s)
+      ORDER BY score DESC
+      LIMIT %s
+      """,
+        (lang, query, lang, query, k),
+    ).fetchall()
+
+    return [Hit(*r) for r in rows]

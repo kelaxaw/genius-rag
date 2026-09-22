@@ -10,6 +10,9 @@ dependencies = [
     "psycopg[binary]>=3.2",
     "pandas>=3.0.5",
     "tokenizers>=0.23.2",
+    "sentence-transformers>=5",
+    "pgvector>=0.4",
+    "numpy>=2",
 ]
 
 [dependency-groups]

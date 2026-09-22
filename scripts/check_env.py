@@ -13,13 +13,17 @@ from genius_rag.config import settings
 
 def check_config() -> None:
     accessToken = settings.genius_access_token.get_secret_value()
-
+    hf_token = settings.hf_token.get_secret_value()
     llmModel = settings.llm_model
 
     if not accessToken:
         raise RuntimeError("GENIUS_ACCESS_TOKEN is empty. Fill in .env")
+
+    if not hf_token:
+        raise RuntimeError("HF_TOKEN is empty. Fill in .env")
+
     else:
-        print(f"config OK: genius token set, model={llmModel}")
+        print(f"config OK, model={llmModel}")
 
 
 def check_postgres() -> None:

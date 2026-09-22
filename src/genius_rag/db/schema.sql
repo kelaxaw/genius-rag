@@ -52,3 +52,19 @@ CREATE TABLE IF NOT EXISTS chunks (
 );
 
 CREATE INDEX IF NOT EXISTS chunks_annotation_id_idx ON chunks (annotation_id);
+
+-- Full-text. The tsvector is maintained by the DB (GENERATED ... STORED) and picks the
+-- dictionary (stemmer + stop words) from the chunk language; 'russian' still stems Latin
+-- words with the English rule, so the English context prefix is fine.
+-- ALTER ... IF NOT EXISTS is idempotent for both fresh and already-populated databases.
+ALTER TABLE chunks ADD COLUMN IF NOT EXISTS tsv tsvector
+    GENERATED ALWAYS AS (
+        to_tsvector(CASE lang WHEN 'ru' THEN 'russian'::regconfig ELSE 'english'::regconfig END, text)
+    ) STORED;
+
+-- GIN = inverted index (lexeme -> rows); speeds up `tsv @@ tsquery`.
+CREATE INDEX IF NOT EXISTS chunks_tsv_idx ON chunks USING gin (tsv);
+
+-- HNSW = neighbour graph for approximate kNN. No training step (unlike IVFFlat), so it can
+-- be created before embeddings exist; inserts extend the graph. Operator: <=> (cosine).
+CREATE INDEX IF NOT EXISTS chunks_embedding_idx ON chunks USING hnsw (embedding vector_cosine_ops);

@@ -1,4 +1,4 @@
-.PHONY: install up down lint typecheck check load psql chunks
+.PHONY: install up down lint typecheck check load psql chunks embed search
 
 install:
 	uv sync
@@ -26,3 +26,12 @@ psql:
 
 chunks:
 	uv run python scripts/build_chunks.py
+
+embed:
+	uv run python scripts/build_embeddings.py
+
+# make search q="question" mode=fts k=5
+mode ?= dense
+k ?= 5
+search:
+	uv run python scripts/search.py "$(q)" --mode $(mode) -k $(k)
