@@ -1,4 +1,4 @@
-"""HTTP-клиент Genius API с авторизацией, retry и пагинацией."""
+"""Genius API HTTP client with auth, retries and pagination."""
 
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ class GeniusClient:
     def _get(
         self, path: str, params: dict[str, Any] | None = None, max_retries: int = 4
     ) -> dict[str, Any]:
-        """GET с exponential backoff на 429/5xx. Возвращает тело поля "response"."""
+        """GET with exponential backoff on 429/5xx. Returns the "response" field of the body."""
         resp: httpx.Response | None = None
         for attempt in range(max_retries):
             resp = self._client.get(path, params=params)

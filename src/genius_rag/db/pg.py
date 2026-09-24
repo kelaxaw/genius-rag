@@ -28,6 +28,13 @@ def connect() -> Conn:
     # so the extension is created here, before schema.sql runs.
     conn.execute("CREATE EXTENSION IF NOT EXISTS vector")
     register_vector(conn)
+    # HNSW applies WHERE only after the index scan: it returns ~ef_search (40) nearest rows
+    # and the filter trims them, so a filtered top-k can come back short. hybrid_search
+    # emits bare filter predicates, which lets the planner see a narrow filter (one artist,
+    # ~84 rows) and switch to an exact scan. A wide filter (lang=en, 67% of rows) on a
+    # larger table still goes through the index; iterative scan keeps reading it until
+    # enough rows pass. relaxed_order is approximate, which is fine: RRF re-ranks anyway.
+    conn.execute("SET hnsw.iterative_scan = 'relaxed_order'")
     return conn
 
 

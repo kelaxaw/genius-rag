@@ -30,8 +30,9 @@ chunks:
 embed:
 	uv run python scripts/build_embeddings.py
 
-# make search q="question" mode=fts k=5
-mode ?= dense
+# make search q="question" mode=hybrid k=5 artist="Drake" lang=ru
+mode ?= hybrid
 k ?= 5
 search:
-	uv run python scripts/search.py "$(q)" --mode $(mode) -k $(k)
+	uv run python scripts/search.py "$(q)" --mode $(mode) -k $(k) \
+		$(if $(artist),--artist "$(artist)") $(if $(lang),--lang $(lang))

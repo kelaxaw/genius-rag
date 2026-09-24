@@ -1,4 +1,4 @@
-"""Ingest: треки и аннотации артистов из Genius API в data/raw/<slug>.jsonl.
+"""Ingest: fetch artists' songs and annotations from the Genius API into data/raw/<slug>.jsonl.
 
 uv run python scripts/ingest.py "Oxxxymiron" "Kai Angel" ...
 """
