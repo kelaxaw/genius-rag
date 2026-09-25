@@ -13,6 +13,9 @@ dependencies = [
     "sentence-transformers>=5",
     "pgvector>=0.4",
     "numpy>=2",
+    "langchain-openai>=1.6.5",
+    "fastapi>=0.141.1",
+    "uvicorn[standard]>=0.54.0",
 ]
 
 [dependency-groups]
