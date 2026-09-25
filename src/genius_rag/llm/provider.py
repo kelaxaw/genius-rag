@@ -18,6 +18,7 @@ from langchain_openai import ChatOpenAI
 from pydantic import BaseModel
 
 from genius_rag.config import settings
+from genius_rag.observability import langchain_callbacks
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -81,8 +82,11 @@ class OpenRouterLLM:
         )
 
     def structured(self, system: str, user: str, schema: type[T]) -> T:
+        # Callbacks record the call in Langfuse as a generation (model, tokens, cost)
+        # under the current trace step; the list is empty when tracing is off.
         output = self.llm.with_structured_output(schema, method="json_schema").invoke(
-            [SystemMessage(system), HumanMessage(user)]
+            [SystemMessage(system), HumanMessage(user)],
+            config={"callbacks": langchain_callbacks(), "run_name": "generate-structured-output"},
         )
 
         if not isinstance(output, schema):

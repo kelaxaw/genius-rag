@@ -16,20 +16,21 @@ are blocking. FastAPI runs a plain def generator in a threadpool, keeping the ev
 
 Dependencies: search and LLM are injected with Depends, so tests replace both through
 app.dependency_overrides and run without a database, network or API key.
+
+Tracing: every request is one `ask` trace in Langfuse (see observability.py).
 """
 
 from collections.abc import Iterable
 from contextlib import asynccontextmanager
-from typing import Annotated, Literal, Protocol
+from typing import Annotated, Literal
 
 from fastapi import Depends, FastAPI, Query
 from fastapi.sse import EventSourceResponse, ServerSentEvent
 
-from genius_rag.db import pg
 from genius_rag.embeddings.encoder import _model
-from genius_rag.generation.answer import answer_question
+from genius_rag.generation.pipeline import Searcher, db_search, generate, retrieve
 from genius_rag.llm.provider import LLM, get_llm
-from genius_rag.retrieval.hybrid import HybridHit, search
+from genius_rag.observability import AskTrace, get_langfuse
 
 
 @asynccontextmanager
@@ -37,30 +38,19 @@ async def lifespan(_app: FastAPI):
     # Load e5 once at startup (lru_cache keeps it); otherwise the first request waits ~8 s.
     _model()
     yield
+    # Export buffered spans before the process exits.
+    get_langfuse().shutdown()
 
 
 app = FastAPI(title="genius-rag", lifespan=lifespan)
-
-
-class Searcher(Protocol):
-    """Search callable: (question, k, artist, lang) -> hits; arguments may be passed by name."""
-
-    def __call__(
-        self, question: str, k: int, artist: str | None, lang: str | None
-    ) -> list[HybridHit]: ...
 
 
 # ---- dependencies --------------------------------------------------------------------------
 
 
 def get_searcher() -> Searcher:
-    """Real hybrid search, one connection per request (a pool can come later)."""
-
-    def run(question: str, k: int, artist: str | None, lang: str | None) -> list[HybridHit]:
-        with pg.connect() as conn:
-            return search(conn, question, k=k, artist=artist, lang=lang)
-
-    return run
+    """Real hybrid search (generation/pipeline.py); tests override it."""
+    return db_search
 
 
 # ---- endpoint -----------------------------------------------------------------------------
@@ -76,14 +66,21 @@ def ask(
     lang: Literal["ru", "en"] | None = None,
 ) -> Iterable[ServerSentEvent]:
     """Question -> events sources, answer, done."""
-    hits = searcher(question=q, k=k, artist=artist, lang=lang)
+    trace = AskTrace(q, k=k, artist=artist, lang=lang, channel="api")
+    try:
+        hits = retrieve(trace, searcher, q, k=k, artist=artist, lang=lang)
 
-    sources = [{"annotation_id": h.annotation_id, "text": h.text} for h in hits]
+        sources = [{"annotation_id": h.annotation_id, "text": h.text} for h in hits]
 
-    yield ServerSentEvent(event="sources", data=sources)
+        yield ServerSentEvent(event="sources", data=sources)
 
-    answer = answer_question(question=q, hits=hits, llm=llm)
+        answer = generate(trace, q, hits, llm)
 
-    yield ServerSentEvent(event="answer", data=answer)
+        yield ServerSentEvent(event="answer", data=answer)
+    except BaseException as e:
+        # BaseException also catches GeneratorExit when the client closes the stream.
+        trace.fail(e)
+        raise
+    trace.end(answer)
 
     yield ServerSentEvent(event="done")

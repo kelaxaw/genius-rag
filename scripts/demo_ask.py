@@ -20,10 +20,10 @@ from typing import Any
 
 import httpx
 
-from genius_rag.db import pg
-from genius_rag.generation.answer import Answer, answer_question
+from genius_rag.generation.answer import Answer
+from genius_rag.generation.pipeline import db_search, generate, retrieve
 from genius_rag.llm.provider import get_llm
-from genius_rag.retrieval.hybrid import search
+from genius_rag.observability import AskTrace, get_langfuse
 
 
 def print_answer(answer: Answer, texts: dict[int, str]) -> None:
@@ -33,9 +33,16 @@ def print_answer(answer: Answer, texts: dict[int, str]) -> None:
 
 
 def run_local(args: argparse.Namespace) -> None:
-    with pg.connect() as conn:
-        hits = search(conn, args.question, k=args.k, artist=args.artist, lang=args.lang)
-    result = answer_question(args.question, hits, get_llm())
+    trace = AskTrace(args.question, k=args.k, artist=args.artist, lang=args.lang, channel="cli")
+    try:
+        hits = retrieve(
+            trace, db_search, args.question, k=args.k, artist=args.artist, lang=args.lang
+        )
+        result = generate(trace, args.question, hits, get_llm())
+    except BaseException as e:
+        trace.fail(e)
+        raise
+    trace.end(result)
     print_answer(result, {h.annotation_id: h.text for h in hits})
     print(f"context: {[h.annotation_id for h in hits]}")
 
@@ -89,6 +96,8 @@ def main(argv: list[str]) -> int:
         run_api(args)
     else:
         run_local(args)
+        # Short-lived script: flush, or buffered spans are lost on exit.
+        get_langfuse().flush()
     return 0
 
 

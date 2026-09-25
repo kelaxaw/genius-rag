@@ -18,5 +18,12 @@ class Settings(BaseSettings):
     openrouter_api_key: SecretStr | None = None
     llm_model: str = "openai/gpt-4o-mini"
 
+    # Langfuse tracing: disabled without keys; tests turn it off via LANGFUSE_TRACING_ENABLED.
+    langfuse_public_key: str | None = None
+    langfuse_secret_key: SecretStr | None = None
+    langfuse_base_url: str = "https://cloud.langfuse.com"
+    langfuse_tracing_environment: str = "development"
+    langfuse_tracing_enabled: bool = True
+
 
 settings = Settings()

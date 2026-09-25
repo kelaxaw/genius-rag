@@ -16,6 +16,8 @@ dependencies = [
     "langchain-openai>=1.6.5",
     "fastapi>=0.141.1",
     "uvicorn[standard]>=0.54.0",
+    "langfuse>=4.15.6",
+    "langchain>=1.4.2",
 ]
 
 [dependency-groups]

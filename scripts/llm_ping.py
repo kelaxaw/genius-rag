@@ -12,6 +12,7 @@ import sys
 from pydantic import BaseModel, Field
 
 from genius_rag.llm.provider import LLM, FakeLLM, get_llm
+from genius_rag.observability import get_langfuse
 
 SYSTEM = "Answer in one or two sentences. Reply in the language of the question."
 
@@ -37,6 +38,7 @@ def main(argv: list[str]) -> int:
     print(f"[{type(llm).__name__}] {type(result).__name__}")
     print(f"language: {result.language}")
     print(f"answer:   {result.answer}")
+    get_langfuse().flush()
     return 0
 
 
